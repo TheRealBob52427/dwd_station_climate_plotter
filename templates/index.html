@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Weather History: {{ station_name }}</title>
+    <style>
+        body { font-family: sans-serif; max-width: 900px; margin: 40px auto; padding: 20px; }
+        h1 { color: #333; margin-top: 0; }
+        .controls { background: #e9ecef; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; }
+        .controls select { padding: 8px; font-size: 16px; border-radius: 4px; border: 1px solid #ccc; min-width: 250px; }
+        .summary { background: #f4f4f4; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #007bff; }
+        .chart-container { text-align: center; margin-bottom: 30px; }
+        .chart-container img { max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; }
+        th { background-color: #007bff; color: white; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .footer { margin-top: 40px; color: #777; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    
+    <div class="controls">
+        <label for="station_select"><strong>Select Station:</strong></label>
+        <form action="/" method="get">
+            <select name="station_id" id="station_select" onchange="this.form.submit()">
+                {% for id, name in stations.items() %}
+                    <option value="{{ id }}" {% if id == current_station %}selected{% endif %}>
+                        {{ name }} (ID: {{ id }})
+                    </option>
+                {% endfor %}
+            </select>
+            <noscript><button type="submit">Load</button></noscript>
+        </form>
+    </div>
+
+    <h1>Weather History: {{ station_name }}</h1>
+
+    {% if error %}
+        <p style="color:red; font-weight:bold;">Error: {{ error }}</p>
+        <p>Note: Not all stations provide up-to-date data for all parameters on the OpenData server.</p>
+    {% else %}
+        <div class="summary">
+            <strong>Summary (last 30 days):</strong><br>
+            Ø Temp: {{ summary.avg_temp }} °C<br>
+            Total Rain: {{ summary.sum_rain }} mm<br>
+            Total Sun: {{ summary.sum_sun }} hours
+        </div>
+
+        {% if plot_url %}
+        <div class="chart-container">
+            <h2>Chart</h2>
+            <img src="data:image/png;base64,{{ plot_url }}" alt="Weather Chart">
+        </div>
+        {% endif %}
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Temp (°C)</th>
+                    <th>Rain (mm)</th>
+                    <th>Sun (h)</th>
+                    <th>Wind (m/s)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td>{{ row.date }}</td>
+                    <td>{{ row.temp_fmt }}</td>
+                    <td>{{ row.rain_fmt }}</td>
+                    <td>{{ row.sun_fmt }}</td>
+                    <td>{{ row.wind_fmt }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+
+    <div class="footer">
+        Data Source: DWD Open Data (Recent)
+    </div>
+</body>
+</html>
