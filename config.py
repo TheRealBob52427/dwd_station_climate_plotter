@@ -20,3 +20,5 @@ DWD_URL = "https://opendata.dwd.de/climate_environment/CDC/observations_germany/
 
 # Project Settings
 GITHUB_REPO_URL = "https://github.com/TheRealBob52427/dwd_station_climate_plotter"
+
+APP_VERSION = "1.0.0"
