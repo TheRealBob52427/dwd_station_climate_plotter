@@ -3,6 +3,7 @@ from flask import Flask, render_template, request, jsonify
 import git
 import os
 import config
+from datetime import datetime
 from weather_logic import get_weather_data
 from plotting import create_plot
 
@@ -13,15 +14,16 @@ app = Flask(__name__)
 def index():
     # Get station ID from URL, default to Köln/Bonn (02667)
     station_id = request.args.get('station_id', '02667')
-
-    # Security check: If unknown ID, revert to default
     if station_id not in config.STATIONS:
         station_id = "02667"
-    
     station_name = config.STATIONS[station_id]
 
     # Fetch data
     data_rows, summary_or_error = get_weather_data(days_back=30, station_id=station_id)
+
+    # Generate current timestamp for "Last Update" display
+    # Format: DD.MM.YYYY HH:MM:SS
+    current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
 
     plot_url = None
     if data_rows:
@@ -35,7 +37,9 @@ def index():
         plot_url=plot_url,
         stations=config.STATIONS,
         current_station=station_id,
-        station_name=station_name
+        station_name=station_name,
+        last_update=current_time,        # <--- PASSING TIMESTAMP
+        github_url=config.GITHUB_REPO_URL # <--- PASSING REPO URL
     )
 
 # --- WEBHOOK FOR GITHUB AUTO-DEPLOY ---
