@@ -2,6 +2,8 @@
 
 A Flask-based web application that visualizes historical climate data from the German Meteorological Service (DWD). It allows users to select specific weather stations and view recent weather trends, including temperature, precipitation, and sunshine duration.
 
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
 ## Features
 
 * **Data Retrieval:** Fetches daily climate data directly from the DWD OpenData server (Recent archive).
@@ -33,4 +35,5 @@ dwd_station_climate_plotter/
 * Check that secret in config.py matches secret specified via "token" variable in Webhook: https://github.com/TheRealBob52427/dwd_station_climate_plotter/settings/hooks/594854373
 
 ## License
-This project is open-source and is licensed under the Apache License 2.0. Data is provided by Deutscher Wetterdienst ([DWD](https://www.dwd.de/DE/Home/home_node.html)) and is licensed under [GeoNutzV](https://www.dwd.de/DE/service/copyright/copyright_node.html)
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details. Data is provided by Deutscher Wetterdienst ([DWD](https://www.dwd.de/DE/Home/home_node.html)) and is licensed under [GeoNutzV](https://www.dwd.de/DE/service/copyright/copyright_node.html)
