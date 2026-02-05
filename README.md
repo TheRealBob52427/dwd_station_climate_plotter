@@ -3,6 +3,7 @@
 A Flask-based web application that visualizes historical climate data from the German Meteorological Service (DWD). It allows users to select specific weather stations and view recent weather trends, including temperature, precipitation, and sunshine duration.
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Pylint](https://github.com/TheRealBob52427/dwd_station_climate_plotter/actions/workflows/pylint.yml/badge.svg)](https://github.com/TheRealBob52427/dwd_station_climate_plotter/actions/workflows/pylint.yml)
 
 ## Features
 
