@@ -233,8 +233,8 @@
     <header>
         <div class="meta-info">
             <h1>Weather History: {{ station_name }}</h1>
-            <div class="last-update" title="Time of data retrieval">
-                Updated: <strong>{{ last_update }}</strong>
+            <div class="last-update" title="Converted to your local time">
+                Updated: <strong id="local-time" data-utc="{{ last_update }}">Loading...</strong>
             </div>
         </div>
     </header>
@@ -330,5 +330,18 @@
         {% endif %}
     </div>
 
+    <script>
+        (function() {
+            var timeElement = document.getElementById('local-time');
+            if (timeElement) {
+                var utcString = timeElement.getAttribute('data-utc');
+                if(utcString) {
+                    var date = new Date(utcString);
+                    // Use browser default locale for formatting
+                    timeElement.textContent = date.toLocaleString();
+                }
+            }
+        })();
+    </script>
 </body>
 </html>
