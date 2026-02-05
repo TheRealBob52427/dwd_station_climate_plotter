@@ -17,3 +17,6 @@ STATIONS = {
 
 # DWD OpenData Base URL
 DWD_URL = "https://opendata.dwd.de/climate_environment/CDC/observations_germany/climate/daily/kl/recent/"
+
+# Project Settings
+GITHUB_REPO_URL = "https://github.com/TheRealBob52427/dwd_station_climate_plotter"
