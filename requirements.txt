@@ -1,4 +1,4 @@
 Flask
 requests
-matplotlib
+plotly
 GitPython
