@@ -32,56 +32,62 @@ def get_git_hash():
 CURRENT_GIT_HASH = get_git_hash()
 
 # --- MAIN ROUTE ---
-@app.route('/')
 def index():
-    """
-    Main dashboard: Fetches weather data based on parameters and renders the UI.
-    """
-    # 1. Get Station ID from URL parameter
+    # 1. Station ID
     station_id = request.args.get('station_id', '02667')
     if station_id not in config.STATIONS:
         station_id = "02667"
     station_name = config.STATIONS[station_id]
 
-    # 2. Get Time Range (days) from URL parameter
+    # 2. Historical Time Range
     try:
         days_back = int(request.args.get('days', config.DEFAULT_DAYS))
-        # Validation: Only allow defined time ranges
         if days_back not in config.TIME_RANGES:
             days_back = config.DEFAULT_DAYS
     except ValueError:
         days_back = config.DEFAULT_DAYS
 
-    # 3. Fetch data
-    # A. Historical Data
+    # 3. Forecast Time Range (NEW)
+    try:
+        days_forecast = int(request.args.get('fc_days', config.DEFAULT_FORECAST_DAYS))
+        if days_forecast not in config.FORECAST_RANGES:
+            days_forecast = config.DEFAULT_FORECAST_DAYS
+    except ValueError:
+        days_forecast = config.DEFAULT_FORECAST_DAYS
+
+    # 4. Fetch data
     data_rows, summary_or_error = get_weather_data(days_back=days_back, station_id=station_id)
     
-    # B. Forecast Data
-    forecast_rows = get_forecast_data(station_id)
+    # Fetch forecast with selected range
+    forecast_rows = get_forecast_data(station_id, days_ahead=days_forecast)
 
+    # 5. Generate Plot
     plot_json = None
     if data_rows:
         plot_json = create_plot(data_rows, forecast_rows)
 
-    # Generate UTC timestamp for client-side local time conversion (ISO 8601)
-    current_time_iso = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")    
+    current_time_iso = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
     return render_template(
         'index.html',
-        rows=data_rows,      # Historical data for the table
-        forecast=forecast_rows, # Pass forecast for a second table if you want
+        rows=data_rows,
+        forecast_rows=forecast_rows, # Pass forecast rows for the new table
         summary=summary_or_error,
         error=summary_or_error if data_rows is None else None,
-        plot_json=plot_json,  # Changed from plot_url
-
-        # Pass configuration to template
+        plot_json=plot_json,
+        
+        # Config
         stations=config.STATIONS,
         current_station=station_id,
         station_name=station_name,
 
-        # Pass time selection data
+        # Selectors
         time_ranges=config.TIME_RANGES,
         current_days=days_back,
+        
+        # Forecast Selectors
+        forecast_ranges=config.FORECAST_RANGES,
+        current_fc_days=days_forecast,
 
         # Metadata
         last_update=current_time_iso,
