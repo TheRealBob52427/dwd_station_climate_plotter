@@ -1,15 +1,51 @@
-# weather_logic.py
-import requests
-import zipfile
-import io
+"""
+Logic module for the DWD Station Climate Plotter.
+Responsible for downloading, unzipping, and parsing data from the DWD OpenData server.
+"""
 import csv
+import io
+import zipfile
 from datetime import datetime, timedelta
+
+import requests
 from config import DWD_URL
+
+
+def _get_float_val(row, key):
+    """
+    Helper function: Reads a value from the CSV row and converts it to float.
+    Ignores DWD error values (usually -999).
+    """
+    try:
+        val = float(row.get(key, -999))
+        # DWD uses -999 for missing values
+        return val if val > -900 else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _find_dwd_filename(response_text, station_id):
+    """
+    Searches the HTML response from the DWD server for the matching ZIP filename.
+    """
+    search_pattern = f"_{station_id}_akt.zip"
+
+    for line in response_text.splitlines():
+        if search_pattern in line and "href" in line:
+            # Extract the filename from the href tag
+            start = line.find('href="') + 6
+            end = line.find('">', start)
+            potential = line[start:end]
+            
+            if search_pattern in potential:
+                return potential
+    return None
+
 
 def get_weather_data(days_back=30, station_id="02667"):
     """
-    Fetches weather data from DWD OpenData server, unzips it,
-    and parses the CSV for the last n days.
+    Fetches weather data from the DWD OpenData server, unzips it,
+    and parses the CSV for the specified time range.
     """
     end_date = datetime.now()
     start_date = end_date - timedelta(days=days_back)
@@ -19,59 +55,49 @@ def get_weather_data(days_back=30, station_id="02667"):
     temps = []
 
     try:
-        # 1. Find the correct filename on the server
-        response = requests.get(DWD_URL)
-        search_pattern = f"_{station_id}_akt.zip"
-        file_name = None
-
-        for line in response.text.splitlines():
-            if search_pattern in line and "href" in line:
-                start = line.find('href="') + 6
-                end = line.find('">', start)
-                potential = line[start:end]
-                if search_pattern in potential:
-                    file_name = potential
-                    break
+        # 1. Find filename on the server
+        # Added timeout to avoid hanging indefinitely
+        response = requests.get(DWD_URL, timeout=10)
+        file_name = _find_dwd_filename(response.text, station_id)
 
         if not file_name:
             return None, f"File for station {station_id} not found on server."
 
-        # 2. Download and Unzip
-        zip_resp = requests.get(DWD_URL + file_name)
-        with zipfile.ZipFile(io.BytesIO(zip_resp.content)) as z:
-            # The data file starts with "produkt_"
-            data_filename = [n for n in z.namelist() if n.startswith("produkt_")][0]
-            with z.open(data_filename) as f:
-                content = f.read().decode('utf-8')
+        # 2. Download & Unzip
+        zip_resp = requests.get(DWD_URL + file_name, timeout=30)
+        with zipfile.ZipFile(io.BytesIO(zip_resp.content)) as z_file:
+            # The actual data file starts with "produkt_"
+            data_filename = [n for n in z_file.namelist() if n.startswith("produkt_")][0]
+
+            with z_file.open(data_filename) as f_obj:
+                content = f_obj.read().decode('utf-8')
                 reader = csv.DictReader(content.splitlines(), delimiter=';')
                 # Strip whitespace from headers
                 reader.fieldnames = [name.strip() for name in reader.fieldnames]
 
-                # Determine date column name
-                date_col = "MESS_DATUM" if "MESS_DATUM" in reader.fieldnames else "MESS_DATUM_BEGINN"
+                # Determine date column name (DWD naming varies sometimes)
+                if "MESS_DATUM" in reader.fieldnames:
+                    date_col = "MESS_DATUM"
+                else:
+                    date_col = "MESS_DATUM_BEGINN"
 
                 for row in reader:
                     try:
                         date_obj = datetime.strptime(row[date_col], "%Y%m%d")
-                    except ValueError: continue
+                    except ValueError:
+                        continue
 
                     if start_date <= date_obj <= end_date:
-                        def get_val(k):
-                            try:
-                                v = float(row.get(k, -999))
-                                # DWD uses -999 for missing values
-                                return v if v > -900 else None
-                            except: return None
-
-                        temp = get_val('TMK')  # Daily mean temperature
-                        rain = get_val('RSK')  # Precipitation
-                        sun = get_val('SDK')   # Sunshine duration
-                        wind = get_val('FX')   # Max wind gust
+                        # Extract values
+                        temp = _get_float_val(row, 'TMK')  # Daily mean temp
+                        rain = _get_float_val(row, 'RSK')  # Precipitation
+                        sun = _get_float_val(row, 'SDK')   # Sunshine duration
+                        wind = _get_float_val(row, 'FX')   # Max wind gust
 
                         # Collect data for the table
                         rows.append({
                             "date": date_obj.strftime('%d.%m.%Y'),
-                            "date_obj": date_obj, # Kept for sorting in plot
+                            "date_obj": date_obj,
                             "temp": temp,
                             "rain": rain,
                             "sun": sun,
@@ -84,15 +110,20 @@ def get_weather_data(days_back=30, station_id="02667"):
                         })
 
                         # Update statistics
-                        if rain: summary["sum_rain"] += rain
-                        if sun: summary["sum_sun"] += sun
-                        if temp: temps.append(temp)
+                        if rain:
+                            summary["sum_rain"] += rain
+                        if sun:
+                            summary["sum_sun"] += sun
+                        if temp:
+                            temps.append(temp)
 
-    except Exception as e:
-        return None, str(e)
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        return None, str(exc)
 
     # Finalize statistics
-    if temps: summary["avg_temp"] = round(sum(temps)/len(temps), 2)
+    if temps:
+        summary["avg_temp"] = round(sum(temps)/len(temps), 2)
+
     summary["sum_rain"] = round(summary["sum_rain"], 2)
     summary["sum_sun"] = round(summary["sum_sun"], 2)
 
