@@ -1,48 +1,61 @@
-# flask_app.py
+"""
+Main application for the DWD Station Climate Plotter.
+Handles web requests, renders templates, and manages GitHub webhooks for auto-deployment.
+"""
+import os
+from datetime import datetime
+
 from flask import Flask, render_template, request, jsonify
 import git
-import os
+
 import config
-from datetime import datetime
 from weather_logic import get_weather_data
 from plotting import create_plot
 
 app = Flask(__name__)
 
 def get_git_hash():
-    """Liest den kurzen Git-Hash des aktuellen Commits aus."""
+    """
+    Retrieves the short Git commit hash of the current version.
+    Returns 'unknown' if the repository cannot be accessed.
+    """
     try:
-        # Pfad zum aktuellen Ordner
+        # Path to the current directory
         repo_path = os.path.dirname(os.path.abspath(__file__))
         repo = git.Repo(repo_path)
-        # Gibt die ersten 7 Zeichen des Hashs zurück (z.B. a1b2c3d)
+        # Return the first 7 characters of the hash (e.g., a1b2c3d)
         return repo.head.object.hexsha[:7]
-    except Exception:
+    except Exception: # pylint: disable=broad-exception-caught
         return "unknown"
 
-# Hash einmalig beim Start berechnen (Global Scope)
+# Calculate Git hash once at startup (Global Scope)
 CURRENT_GIT_HASH = get_git_hash()
 
 # --- MAIN ROUTE ---
 @app.route('/')
 def index():
-    # Get station ID from URL, default to Köln/Bonn (02667)
+    """
+    Main dashboard: Fetches weather data based on parameters and renders the UI.
+    """
+    # 1. Get Station ID from URL parameter
     station_id = request.args.get('station_id', '02667')
     if station_id not in config.STATIONS:
         station_id = "02667"
     station_name = config.STATIONS[station_id]
 
+    # 2. Get Time Range (days) from URL parameter
     try:
         days_back = int(request.args.get('days', config.DEFAULT_DAYS))
+        # Validation: Only allow defined time ranges
         if days_back not in config.TIME_RANGES:
             days_back = config.DEFAULT_DAYS
     except ValueError:
         days_back = config.DEFAULT_DAYS
-    
-    # Fetch data
+
+    # 3. Fetch data for the dynamic time range
     data_rows, summary_or_error = get_weather_data(days_back=days_back, station_id=station_id)
 
-    # Generate current timestamp (UTC time in ISO format) for "Last Update" display
+    # Generate UTC timestamp for client-side local time conversion (ISO 8601)
     current_time_iso = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
     plot_url = None
@@ -50,14 +63,22 @@ def index():
         plot_url = create_plot(data_rows)
 
     return render_template(
-        'index.html', 
-        rows=data_rows, 
-        summary=summary_or_error, 
+        'index.html',
+        rows=data_rows,
+        summary=summary_or_error,
         error=summary_or_error if data_rows is None else None,
         plot_url=plot_url,
+
+        # Pass configuration to template
         stations=config.STATIONS,
         current_station=station_id,
         station_name=station_name,
+
+        # Pass time selection data
+        time_ranges=config.TIME_RANGES,
+        current_days=days_back,
+
+        # Metadata
         last_update=current_time_iso,
         github_url=config.GITHUB_REPO_URL,
         app_version=config.APP_VERSION,
@@ -67,43 +88,36 @@ def index():
 # --- WEBHOOK FOR GITHUB AUTO-DEPLOY ---
 @app.route('/update_server', methods=['POST'])
 def webhook():
-    # 1. Verification
-    # For simplicity, we check a URL parameter or a simple header.
-    # GitHub standard webhooks send the signature in headers, but custom headers
-    # are easier to configure for beginners.
-    # Usage: URL in GitHub Webhook: http://user.pythonanywhere.com/update_server?token=MY_SECRET
-    
+    """
+    Receives the GitHub Webhook, pulls the latest code, and triggers a server reload.
+    """
     token = request.args.get('token')
-    
-    # Alternatively check header if you configured it that way
-    # token = request.headers.get('X-Git-Token')
 
+    # Security check
     if token != config.WEBHOOK_SECRET:
         return jsonify({"message": "Forbidden", "error": "Invalid token"}), 403
-    
+
     try:
-        # 2. Update Code
-        # We assume this script runs inside the repo folder
+        # Initialize Repo object for the current directory
         repo = git.Repo(os.path.dirname(os.path.abspath(__file__)))
         origin = repo.remotes.origin
         
-        # Pull latest changes
+        # Pull latest changes from GitHub
         pull_info = origin.pull()
-        
-        # 3. Reload Web App
-        # In PythonAnywhere Free Tier, we cannot restart the server programmatically via API.
-        # But touching the WSGI file triggers a reload.
+
+        # Touch the WSGI file to force a reload on PythonAnywhere
         if os.path.exists(config.WSGI_FILE_PATH):
             os.utime(config.WSGI_FILE_PATH, None)
             return jsonify({
-                "message": "Updated successfully", 
+                "message": "Updated successfully",
                 "git_info": str(pull_info)
             }), 200
-        else:
-            return jsonify({
-                "message": "Git pull successful, but WSGI file not found for reload.",
-                "path_checked": config.WSGI_FILE_PATH
-            }), 200
 
-    except Exception as e:
-        return jsonify({"message": "Error during update", "error": str(e)}), 500
+        # Refactored to avoid unnecessary 'else' (Pylint R1705)
+        return jsonify({
+            "message": "Git pull successful, but WSGI file not found for reload.",
+            "path_checked": config.WSGI_FILE_PATH
+        }), 200
+
+    except Exception as exc: # pylint: disable=broad-exception-caught
+        return jsonify({"message": "Error during update", "error": str(exc)}), 500
