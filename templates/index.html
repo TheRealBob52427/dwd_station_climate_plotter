@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Weather History: {{ station_name }}</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <style>
         :root {
             --primary-color: #007bff;
@@ -140,12 +141,8 @@
             border-radius: 8px;
             overflow: hidden;
             border: 1px solid var(--border-color);
-        }
-
-        .chart-container img {
-            width: 100%;
-            height: auto;
-            display: block;
+            background: white;
+            min-height: 400px; /* Placeholder height */
         }
 
         /* Table */
@@ -310,10 +307,18 @@
             </div>
         </div>
 
-        {% if plot_url %}
+        {% if plot_json %}
         <div class="chart-container">
-            <img src="data:image/png;base64,{{ plot_url }}" alt="Weather Chart">
+            <div id="weather-plot"></div>
         </div>
+        <script>
+            // Parse the JSON passed from Flask
+            var plotData = {{ plot_json | safe }};
+            var config = {responsive: true, displayModeBar: false};
+            
+            // Render the plot
+            Plotly.newPlot('weather-plot', plotData.data, plotData.layout, config);
+        </script>
         {% endif %}
 
         <h3 style="margin-top: 30px;">Daily Data</h3>
