@@ -32,14 +32,13 @@ TIME_RANGES = {
 
 # Range for forecast data query
 FORECAST_RANGES = {
-    3: "next 3 days",
-    7: "next 7 days",
-    14: "next 14 days"
+    1: "next day",
+    2: "next 2 days"
 }
 
 # Default ranges
 DEFAULT_DAYS = 30
-DEFAULT_FORECAST_DAYS = 7
+DEFAULT_FORECAST_DAYS = 1
 
 # DWD OpenData Base URL
 DWD_URL = "https://opendata.dwd.de/climate_environment/CDC/observations_germany/climate/daily/kl/recent/"
