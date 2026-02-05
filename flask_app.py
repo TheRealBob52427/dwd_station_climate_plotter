@@ -56,31 +56,15 @@ def index():
     # A. Historical Data
     data_rows, summary_or_error = get_weather_data(days_back=days_back, station_id=station_id)
     
-    # B. Forecast Data (NEW)
+    # B. Forecast Data
     forecast_rows = get_forecast_data(station_id)
-    
-    # Combine them for plotting (Historical + Forecast)
-    # We pass 'combined_data' to the plotter
-    combined_data = []
-    if data_rows:
-        combined_data.extend(data_rows) # Note: data_rows is currently reversed in your logic? 
-        # CAREFUL: Your existing get_weather_data returns reversed list (Newest first).
-        # For plotting, we usually want Oldest -> Newest.
-        # Your plotting.py handles the reversal: "plot_data = rows[::-1]"
-    
-    plot_rows = []
-    if data_rows:
-        plot_rows.extend(data_rows)
-    if forecast_rows:
-        # Forecast is usually Oldest -> Newest. Let's reverse it to match data_rows structure 
-        # if we want to treat them identically, OR handle sorting in plotting.py.
-        # Simplest: Just pass them separately to create_plot.
-        pass
 
     plot_json = None
     if data_rows:
-        # Update create_plot signature to accept forecast
         plot_json = create_plot(data_rows, forecast_rows)
+
+    # Generate UTC timestamp for client-side local time conversion (ISO 8601)
+    current_time_iso = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")    
 
     return render_template(
         'index.html',
