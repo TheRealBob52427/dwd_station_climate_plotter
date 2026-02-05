@@ -17,6 +17,12 @@ STATIONS = {
     "15000": "Aachen-Orsbach"
 }
 
+STATION_COORDS = {
+    "02667": (50.8659, 7.1427),   # Köln/Bonn
+    "03623": (50.8167, 6.6500),   # Nörvenich
+    "15000": (50.7983, 6.0244)    # Aachen-Orsbach
+}
+
 # range for data query
 TIME_RANGES = {
     30: "last 30 days",
