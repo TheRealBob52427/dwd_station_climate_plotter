@@ -24,5 +24,13 @@ dwd_station_climate_plotter/
 └── README.md            # Project documentation
 ```
 
+## Setup for PythonAnywhere
+* my PythonAnywhere profile is here: https://www.pythonanywhere.com/user/bbruns/
+* add library path path "/home/bbruns/mysite/dwd_station_climate_plotter" to pulled repo code in "/var/www/bbruns_pythonanywhere_com_wsgi.py"
+* open bash console: https://github.com/TheRealBob52427/dwd_station_climate_plotter.git && pip install --user -r ~/mysite/dwd_station_climate_plotter/requirements.txt
+
+# Note
+* Check that secret in config.py matches secret specified via "token" variable in Webhook: https://github.com/TheRealBob52427/dwd_station_climate_plotter/settings/hooks/594854373
+
 ## License
-This project is open-source. Data provided by Deutscher Wetterdienst ([DWD](https://www.dwd.de/DE/Home/home_node.html)).
+This project is open-source and is licensed under the Apache License 2.0. Data is provided by Deutscher Wetterdienst ([DWD](https://www.dwd.de/DE/Home/home_node.html)) and is licensed under [GeoNutzV](https://www.dwd.de/DE/service/copyright/copyright_node.html)
