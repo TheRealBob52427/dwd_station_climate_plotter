@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 
 import requests
 from config import DWD_URL
-
+from config import DWD_URL, STATION_COORDS
 
 def _get_float_val(row, key):
     """
@@ -41,6 +41,57 @@ def _find_dwd_filename(response_text, station_id):
                 return potential
     return None
 
+def get_forecast_data(station_id):
+    """
+    Fetches 7-day forecast from Open-Meteo (using DWD ICON model).
+    """
+    if station_id not in STATION_COORDS:
+        return None
+        
+    lat, lon = STATION_COORDS[station_id]
+    
+    url = "https://api.open-meteo.com/v1/forecast"
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "daily": ["temperature_2m_max", "temperature_2m_min", "precipitation_sum", "sunshine_duration"],
+        "timezone": "Europe/Berlin",
+        "models": "icon_d2"  # Explicitly use DWD's high-res model
+    }
+
+    try:
+        response = requests.get(url, params=params, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        
+        daily = data.get("daily", {})
+        times = daily.get("time", [])
+        
+        forecast_rows = []
+        for i, date_str in enumerate(times):
+            # Calculate avg temp from min/max for consistency with historical plot
+            t_max = daily["temperature_2m_max"][i]
+            t_min = daily["temperature_2m_min"][i]
+            t_avg = (t_max + t_min) / 2 if t_max is not None and t_min is not None else None
+            
+            # Open-Meteo gives sunshine in seconds, convert to hours
+            sun_sec = daily["sunshine_duration"][i]
+            sun_hours = sun_sec / 3600 if sun_sec is not None else 0
+
+            forecast_rows.append({
+                "date": datetime.strptime(date_str, "%Y-%m-%d").strftime('%d.%m.%Y'),
+                "date_obj": datetime.strptime(date_str, "%Y-%m-%d"),
+                "temp": t_avg,
+                "rain": daily["precipitation_sum"][i],
+                "sun": sun_hours,
+                "type": "forecast" # Marker to distinguish in plotting
+            })
+            
+        return forecast_rows
+
+    except Exception as e:
+        print(f"Forecast Error: {e}")
+        return []
 
 def get_weather_data(days_back=30, station_id="02667"):
     """
