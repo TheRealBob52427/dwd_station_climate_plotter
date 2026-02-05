@@ -32,8 +32,15 @@ def index():
         station_id = "02667"
     station_name = config.STATIONS[station_id]
 
+    try:
+        days_back = int(request.args.get('days', config.DEFAULT_DAYS))
+        if days_back not in config.TIME_RANGES:
+            days_back = config.DEFAULT_DAYS
+    except ValueError:
+        days_back = config.DEFAULT_DAYS
+    
     # Fetch data
-    data_rows, summary_or_error = get_weather_data(days_back=30, station_id=station_id)
+    data_rows, summary_or_error = get_weather_data(days_back=days_back, station_id=station_id)
 
     # Generate current timestamp (UTC time in ISO format) for "Last Update" display
     current_time_iso = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
