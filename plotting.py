@@ -1,21 +1,16 @@
 """
 Plotting module for the DWD Station Climate Plotter.
-Generates Matplotlib charts for weather data visualization.
+Generates interactive Plotly charts for weather data visualization.
 """
-import base64
-import io
-
-import matplotlib
-# 'Agg' is crucial for servers without a display (headless) like PythonAnywhere.
-# It must be configured BEFORE importing pyplot.
-matplotlib.use('Agg')
-# pylint: disable=wrong-import-position
-import matplotlib.pyplot as plt
-
+import json
+import plotly
+import plotly.graph_objs as go
+from plotly.subplots import make_subplots
 
 def create_plot(rows):
     """
-    Creates a bar chart from the provided weather rows and returns it as a Base64 string.
+    Creates an interactive Plotly chart from the provided weather rows 
+    and returns it as a JSON string.
     """
     if not rows:
         return None
@@ -24,55 +19,68 @@ def create_plot(rows):
     plot_data = rows[::-1]
 
     # Extract data columns
-    dates = [r['date'][:5] for r in plot_data]  # Day.Month only
+    # specific format YYYY-MM-DD is often better parsed by JS, 
+    # but the existing date_obj is robust.
+    dates = [r['date_obj'] for r in plot_data]
     temps = [r['temp'] if r['temp'] is not None else 0 for r in plot_data]
     rains = [r['rain'] if r['rain'] is not None else 0 for r in plot_data]
     suns = [r['sun'] if r['sun'] is not None else 0 for r in plot_data]
 
-    # Create Figure
-    # We use '_' for the figure variable as we don't need to access it directly,
-    # solving the "unused variable" linting warning.
-    _, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
-
-    # 1. Plot: Temperature
-    ax1.bar(dates, temps, color='#d9534f', alpha=0.7, label='Temp (°C)')
-    ax1.set_ylabel('Temp (°C)')
-    ax1.set_title('Temperature Trend')
-    ax1.grid(True, axis='y', linestyle='--', alpha=0.5)
-    ax1.legend()
-
-    # 2. Plot: Rain & Sun (Grouped Bars)
-    x_axis = range(len(dates))
-    width = 0.4
-
-    ax2.bar(
-        [i - width/2 for i in x_axis],
-        rains,
-        width,
-        label='Rain (mm)',
-        color='#0275d8'
-    )
-    ax2.bar(
-        [i + width/2 for i in x_axis],
-        suns,
-        width,
-        label='Sun (h)',
-        color='#f0ad4e'
+    # Create Subplots with shared X-axis
+    fig = make_subplots(
+        rows=2, cols=1, 
+        shared_xaxes=True,
+        vertical_spacing=0.1,
+        subplot_titles=("Temperature Trend", "Rain & Sun")
     )
 
-    ax2.set_ylabel('Amount')
-    ax2.set_xticks(x_axis)
-    ax2.set_xticklabels(dates, rotation=45)
-    ax2.legend()
-    ax2.grid(True, axis='y', linestyle='--', alpha=0.5)
+    # 1. Plot: Temperature (Bar)
+    fig.add_trace(
+        go.Bar(
+            x=dates, 
+            y=temps, 
+            name='Temp (°C)', 
+            marker_color='#d9534f',
+            opacity=0.7
+        ),
+        row=1, col=1
+    )
 
-    plt.tight_layout()
+    # 2. Plot: Rain (Bar)
+    fig.add_trace(
+        go.Bar(
+            x=dates, 
+            y=rains, 
+            name='Rain (mm)', 
+            marker_color='#0275d8'
+        ),
+        row=2, col=1
+    )
 
-    # Save to Buffer
-    img = io.BytesIO()
-    plt.savefig(img, format='png')
-    img.seek(0)
-    plot_url = base64.b64encode(img.getvalue()).decode()
-    plt.close()  # Free memory
+    # 3. Plot: Sun (Bar)
+    fig.add_trace(
+        go.Bar(
+            x=dates, 
+            y=suns, 
+            name='Sun (h)', 
+            marker_color='#f0ad4e'
+        ),
+        row=2, col=1
+    )
 
-    return plot_url
+    # Update Layout
+    fig.update_layout(
+        height=800,
+        barmode='group', # Groups bars for Rain/Sun
+        showlegend=True,
+        margin=dict(l=50, r=50, t=50, b=50),
+        plot_bgcolor='rgba(0,0,0,0)', # Transparent background
+        paper_bgcolor='rgba(0,0,0,0)'
+    )
+
+    # Add Grid lines manually since we made bg transparent
+    fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='#e5e5e5')
+    fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#e5e5e5')
+
+    # Serialize to JSON for the frontend
+    return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
