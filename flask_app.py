@@ -35,8 +35,8 @@ def index():
     # Fetch data
     data_rows, summary_or_error = get_weather_data(days_back=30, station_id=station_id)
 
-    # Generate current timestamp for "Last Update" display
-    current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+    # Generate current timestamp (UTC time in ISO format) for "Last Update" display
+    current_time_iso = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
     plot_url = None
     if data_rows:
@@ -51,9 +51,8 @@ def index():
         stations=config.STATIONS,
         current_station=station_id,
         station_name=station_name,
-        last_update=current_time,
+        last_update=current_time_iso,
         github_url=config.GITHUB_REPO_URL,
-        # NEU: Versionierung an Template übergeben
         app_version=config.APP_VERSION,
         git_hash=CURRENT_GIT_HASH
     )
