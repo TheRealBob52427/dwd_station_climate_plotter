@@ -58,16 +58,16 @@ def index():
     # Generate UTC timestamp for client-side local time conversion (ISO 8601)
     current_time_iso = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    plot_url = None
+    plot_json = None
     if data_rows:
-        plot_url = create_plot(data_rows)
+        plot_json = create_plot(data_rows)
 
     return render_template(
         'index.html',
         rows=data_rows,
         summary=summary_or_error,
         error=summary_or_error if data_rows is None else None,
-        plot_url=plot_url,
+        plot_json=plot_json,  # Changed from plot_url
 
         # Pass configuration to template
         stations=config.STATIONS,
