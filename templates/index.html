@@ -1,27 +1,205 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Weather History: {{ station_name }}</title>
     <style>
-        body { font-family: sans-serif; max-width: 900px; margin: 40px auto; padding: 20px; }
-        h1 { color: #333; margin-top: 0; }
-        .controls { background: #e9ecef; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; }
-        .controls select { padding: 8px; font-size: 16px; border-radius: 4px; border: 1px solid #ccc; min-width: 250px; }
-        .summary { background: #f4f4f4; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #007bff; }
-        .chart-container { text-align: center; margin-bottom: 30px; }
-        .chart-container img { max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; }
-        th { background-color: #007bff; color: white; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
-        .footer { margin-top: 40px; color: #777; font-size: 0.9em; }
+        :root {
+            --primary-color: #007bff;
+            --bg-color: #f8f9fa;
+            --text-color: #333;
+            --border-color: #dee2e6;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            color: var(--text-color);
+            background-color: white;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.5;
+        }
+
+        /* Header Area */
+        header {
+            margin-bottom: 30px;
+            border-bottom: 2px solid var(--primary-color);
+            padding-bottom: 20px;
+        }
+
+        h1 {
+            margin: 0 0 10px 0;
+            color: #2c3e50;
+        }
+
+        .meta-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .last-update {
+            font-size: 0.9em;
+            color: #6c757d;
+            background: #e9ecef;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        /* Controls */
+        .controls {
+            background: var(--bg-color);
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            border: 1px solid var(--border-color);
+        }
+
+        .controls label {
+            font-weight: 600;
+            margin-right: 10px;
+        }
+
+        select {
+            padding: 8px 12px;
+            font-size: 16px;
+            border-radius: 4px;
+            border: 1px solid #ced4da;
+            min-width: 300px;
+        }
+
+        /* Summary Box */
+        .summary {
+            background-color: #e7f1ff;
+            border-left: 5px solid var(--primary-color);
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 30px;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .summary-item strong {
+            display: block;
+            color: #495057;
+            font-size: 0.85em;
+            text-transform: uppercase;
+        }
+
+        .summary-item span {
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        /* Chart */
+        .chart-container {
+            text-align: center;
+            margin-bottom: 40px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+
+        .chart-container img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        /* Table */
+        .table-responsive {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background-color: var(--primary-color);
+            color: white;
+            white-space: nowrap;
+        }
+
+        tr:nth-child(even) {
+            background-color: var(--bg-color);
+        }
+
+        tr:hover {
+            background-color: #e2e6ea;
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+
+        .github-link {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+            color: #333;
+            font-weight: 500;
+            padding: 8px 12px;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+
+        .github-link:hover {
+            background-color: #f0f0f0;
+            color: black;
+        }
+
+        .error-msg {
+            color: #721c24;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
+
+    <header>
+        <div class="meta-info">
+            <h1>Weather History: {{ station_name }}</h1>
+            <div class="last-update" title="Time of data fetch">
+                Updated: <strong>{{ last_update }}</strong>
+            </div>
+        </div>
+    </header>
     
     <div class="controls">
-        <label for="station_select"><strong>Select Station:</strong></label>
         <form action="/" method="get">
+            <label for="station_select">Select Station:</label>
             <select name="station_id" id="station_select" onchange="this.form.submit()">
                 {% for id, name in stations.items() %}
                     <option value="{{ id }}" {% if id == current_station %}selected{% endif %}>
@@ -33,52 +211,78 @@
         </form>
     </div>
 
-    <h1>Weather History: {{ station_name }}</h1>
-
     {% if error %}
-        <p style="color:red; font-weight:bold;">Error: {{ error }}</p>
-        <p>Note: Not all stations provide up-to-date data for all parameters on the OpenData server.</p>
+        <div class="error-msg">
+            <strong>Error:</strong> {{ error }}<br>
+            <small>Note: Some stations may not provide up-to-date data for all parameters on the DWD OpenData server.</small>
+        </div>
     {% else %}
+        
         <div class="summary">
-            <strong>Summary (last 30 days):</strong><br>
-            Ø Temp: {{ summary.avg_temp }} °C<br>
-            Total Rain: {{ summary.sum_rain }} mm<br>
-            Total Sun: {{ summary.sum_sun }} hours
+            <div style="font-size: 1.1em; margin-bottom: 10px;">Summary (Last 30 Days)</div>
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <strong>Ø Temperature</strong>
+                    <span>{{ summary.avg_temp }} °C</span>
+                </div>
+                <div class="summary-item">
+                    <strong>Total Rain</strong>
+                    <span>{{ summary.sum_rain }} mm</span>
+                </div>
+                <div class="summary-item">
+                    <strong>Total Sun</strong>
+                    <span>{{ summary.sum_sun }} h</span>
+                </div>
+            </div>
         </div>
 
         {% if plot_url %}
         <div class="chart-container">
-            <h2>Chart</h2>
-            <img src="data:image/png;base64,{{ plot_url }}" alt="Weather Chart">
+            <img src="data:image/png;base64,{{ plot_url }}" alt="Weather Chart - Temperature, Rain and Sun">
         </div>
         {% endif %}
 
-        <table>
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Temp (°C)</th>
-                    <th>Rain (mm)</th>
-                    <th>Sun (h)</th>
-                    <th>Wind (m/s)</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for row in rows %}
-                <tr>
-                    <td>{{ row.date }}</td>
-                    <td>{{ row.temp_fmt }}</td>
-                    <td>{{ row.rain_fmt }}</td>
-                    <td>{{ row.sun_fmt }}</td>
-                    <td>{{ row.wind_fmt }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <h3>Daily Data</h3>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Temp (°C)</th>
+                        <th>Rain (mm)</th>
+                        <th>Sun (h)</th>
+                        <th>Wind (m/s)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr>
+                        <td>{{ row.date }}</td>
+                        <td>{{ row.temp_fmt }}</td>
+                        <td>{{ row.rain_fmt }}</td>
+                        <td>{{ row.sun_fmt }}</td>
+                        <td>{{ row.wind_fmt }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     {% endif %}
 
     <div class="footer">
-        Data Source: DWD Open Data (Recent)
+        <div>
+            Data Source: <a href="https://opendata.dwd.de/" target="_blank" style="color: #6c757d;">DWD Open Data</a>
+        </div>
+        
+        {% if github_url %}
+        <a href="{{ github_url }}" target="_blank" class="github-link">
+            <svg height="20" width="20" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+            </svg>
+            View Source
+        </a>
+        {% endif %}
     </div>
+
 </body>
 </html>
