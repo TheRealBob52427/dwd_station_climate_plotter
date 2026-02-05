@@ -32,6 +32,7 @@ def get_git_hash():
 CURRENT_GIT_HASH = get_git_hash()
 
 # --- MAIN ROUTE ---
+@app.route('/')
 def index():
     # 1. Station ID
     station_id = request.args.get('station_id', '02667')
