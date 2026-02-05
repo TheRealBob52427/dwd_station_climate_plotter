@@ -3,6 +3,7 @@
 A Flask-based web application that visualizes historical climate data from the German Meteorological Service (DWD). It fetches daily observations, parses them, and renders **interactive** charts for temperature, precipitation, and sunshine duration.
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Docker Image](https://img.shields.io/badge/docker-ghcr.io-blue?logo=docker&logoColor=white)](https://github.com/users/TheRealBob52427/packages/container/package/dwd_station_climate_plotter)
 [![Pylint](https://github.com/TheRealBob52427/dwd_station_climate_plotter/actions/workflows/pylint.yml/badge.svg)](https://github.com/TheRealBob52427/dwd_station_climate_plotter/actions/workflows/pylint.yml)
 
 ## ✨ Features
