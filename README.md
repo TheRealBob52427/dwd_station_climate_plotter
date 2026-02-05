@@ -4,6 +4,7 @@ A Flask-based web application that visualizes historical climate data from the G
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Docker Image](https://img.shields.io/badge/docker-ghcr.io-blue?logo=docker&logoColor=white)](https://github.com/users/TheRealBob52427/packages/container/package/dwd_station_climate_plotter)
+[![GitHub Release](https://img.shields.io/github/v/release/TheRealBob52427/dwd_station_climate_plotter?label=stable)](https://github.com/TheRealBob52427/dwd_station_climate_plotter/releases)
 [![Pylint](https://github.com/TheRealBob52427/dwd_station_climate_plotter/actions/workflows/pylint.yml/badge.svg)](https://github.com/TheRealBob52427/dwd_station_climate_plotter/actions/workflows/pylint.yml)
 
 ## ✨ Features
