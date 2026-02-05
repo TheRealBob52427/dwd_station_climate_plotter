@@ -1,4 +1,6 @@
-# config.py
+"""
+configuration settings for data retrieval and automatic release on pythonanywhere with github webhook
+"""
 
 # Your secret token for the GitHub Webhook.
 # IMPORTANT: Change this to a random secure string!
