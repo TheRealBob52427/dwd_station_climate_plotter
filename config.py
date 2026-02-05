@@ -15,6 +15,18 @@ STATIONS = {
     "15000": "Aachen-Orsbach"
 }
 
+# range for data query
+TIME_RANGES = {
+    30: "last 30 days",
+    60: "last 60 days",
+    90: "last 90 days",
+    182: "last 6 months",
+    365: "last year"
+}
+
+# default range
+DEFAULT_DAYS = 30
+
 # DWD OpenData Base URL
 DWD_URL = "https://opendata.dwd.de/climate_environment/CDC/observations_germany/climate/daily/kl/recent/"
 
