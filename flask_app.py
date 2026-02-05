@@ -9,6 +9,20 @@ from plotting import create_plot
 
 app = Flask(__name__)
 
+def get_git_hash():
+    """Liest den kurzen Git-Hash des aktuellen Commits aus."""
+    try:
+        # Pfad zum aktuellen Ordner
+        repo_path = os.path.dirname(os.path.abspath(__file__))
+        repo = git.Repo(repo_path)
+        # Gibt die ersten 7 Zeichen des Hashs zurück (z.B. a1b2c3d)
+        return repo.head.object.hexsha[:7]
+    except Exception:
+        return "unknown"
+
+# Hash einmalig beim Start berechnen (Global Scope)
+CURRENT_GIT_HASH = get_git_hash()
+
 # --- MAIN ROUTE ---
 @app.route('/')
 def index():
@@ -22,7 +36,6 @@ def index():
     data_rows, summary_or_error = get_weather_data(days_back=30, station_id=station_id)
 
     # Generate current timestamp for "Last Update" display
-    # Format: DD.MM.YYYY HH:MM:SS
     current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
 
     plot_url = None
@@ -38,8 +51,11 @@ def index():
         stations=config.STATIONS,
         current_station=station_id,
         station_name=station_name,
-        last_update=current_time,        # <--- PASSING TIMESTAMP
-        github_url=config.GITHUB_REPO_URL # <--- PASSING REPO URL
+        last_update=current_time,
+        github_url=config.GITHUB_REPO_URL,
+        # NEU: Versionierung an Template übergeben
+        app_version=config.APP_VERSION,
+        git_hash=CURRENT_GIT_HASH
     )
 
 # --- WEBHOOK FOR GITHUB AUTO-DEPLOY ---
