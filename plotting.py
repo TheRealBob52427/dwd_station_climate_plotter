@@ -157,9 +157,13 @@ def create_plot(historical_rows, forecast_rows=None):
 
     # Visual separator for "Today" (if forecast exists)
     if f_dates:
+        # FIX: Convert datetime to timestamp (milliseconds) to avoid TypeError in Plotly's sum()
+        # Plotly uses milliseconds since epoch for date axes internally.
+        forecast_start_ts = f_dates[0].timestamp() * 1000
+
         # Draw a vertical line at the start of the forecast
         fig.add_vline(
-            x=f_dates[0], 
+            x=forecast_start_ts,  # CHANGED: Use timestamp instead of datetime object
             line_width=1, 
             line_dash="dash", 
             line_color="gray",
