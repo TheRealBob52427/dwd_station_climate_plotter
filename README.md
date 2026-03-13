@@ -1,8 +1,8 @@
-# DWD Station Climate Plotter & Forecast 🌦️
+# DWD Station Climate Plotter, Forecast & PV Predictor 🌦️☀️
 
-A Flask-based web application that visualizes **historical climate data** from the German Meteorological Service (DWD) and provides **local weather forecasts** using the Open-Meteo API (DWD ICON-D2 model).
+A Flask-based web application that visualizes **historical climate data** from the German Meteorological Service (DWD), provides **local weather forecasts** using the Open-Meteo API (DWD ICON-D2 model), and predicts **Photovoltaic (PV) Yield** using Machine Learning.
 
-It fetches daily observations, parses them, and renders **interactive** charts where historical data transitions seamlessly into the forecast.
+It fetches daily observations, parses them, and renders **interactive** charts where historical data transitions seamlessly into the forecast, alongside a comparison of actual vs. predicted solar energy generation.
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Docker Image](https://img.shields.io/badge/docker-ghcr.io-blue?logo=docker&logoColor=white)](https://github.com/users/TheRealBob52427/packages/container/package/dwd_station_climate_plotter)
@@ -12,36 +12,38 @@ It fetches daily observations, parses them, and renders **interactive** charts w
 ## ✨ Features
 
 * **Live Historical Data:** Fetches daily climate data directly from the DWD OpenData server (Recent archive).
-* **High-Res Forecasts:** Integrates 3 to 14-day forecasts via [Open-Meteo](https://open-meteo.com/), utilizing DWD's high-resolution **ICON-D2** model.
+* **High-Res Forecasts:** Integrates forecasts via [Open-Meteo](https://open-meteo.com/), utilizing DWD's high-resolution **ICON-D2** model.
+* **Machine Learning PV Prediction:** Dynamically trains a Linear Regression model using actual PV data from a Google Spreadsheet to predict solar yield based on temperature, rain, sunshine hours, and the day of the year.
 * **Interactive Visualization:**
-    * Uses **Plotly** to generate responsive charts.
+    * Uses **Plotly** to generate responsive, multi-row charts.
     * Visual distinction between historical (solid) and forecast (dashed/transparent) data.
-    * Combined temperature trends and precipitation/sunshine bars.
+    * Combined temperature trends, precipitation/sunshine bars, and Actual vs. Predicted PV Yield comparisons.
 * **Customizable Views:**
     * Select specific weather stations.
     * Adjust historical time range (e.g., last 30, 90, 365 days).
-    * Adjust forecast range (e.g., next 3, 7, 14 days).
+    * Adjust forecast range (e.g., next 1, 2 days).
 * **Auto-Deployment:** Built-in webhook endpoint (`/update_server`) to trigger automatic updates from GitHub to PythonAnywhere.
 
 ## 🛠️ Tech Stack
 
 * **Python 3.10+**
 * **Flask:** Web framework.
+* **Pandas & Scikit-Learn:** Data manipulation and Linear Regression for PV predictions.
 * **Plotly:** Frontend graphing library.
 * **Requests:** HTTP library for fetching data.
 * **GitPython:** For handling auto-deployment operations.
-* **APIs:** DWD OpenData (ZIP/CSV parsing) & Open-Meteo (JSON).
+* **APIs & Data:** DWD OpenData (ZIP/CSV parsing), Open-Meteo (JSON), and Google Sheets (CSV).
 
 ## 📂 Project Structure
 
 ```text
 dwd_station_climate_plotter/
-├── config.py            # Configuration (Stations, Coords, Secrets, Ranges)
-├── weather_logic.py     # Data fetching: DWD (ZIP/CSV) & Open-Meteo (JSON)
-├── plotting.py          # Plotly JSON chart generation (History + Forecast)
+├── config.py            # Configuration (Stations, Coords, PV URL, Secrets)
+├── weather_logic.py     # Data fetching & ML logic (DWD, Open-Meteo, Sheets)
+├── plotting.py          # Plotly JSON chart generation (History + Forecast + PV)
 ├── flask_app.py         # Main Flask application & Routes
 ├── templates/
-│   └── index.html       # Dashboard template with Plotly.js integration
+│   └── index.html       # Dashboard template with Plotly.js & Data Tables
 ├── requirements.txt     # Python dependencies
 ├── Dockerfile           # Docker container configuration
 └── README.md            # Documentation
