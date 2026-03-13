@@ -164,11 +164,22 @@ def enrich_with_pv_data(historical_rows, forecast_rows):
         return historical_rows, forecast_rows
 
     try:
-        df = pd.read_csv(config.PV_DATA_URL, decimal=',')
+        import config  # Falls noch nicht global importiert
+        import pandas as pd
+        from sklearn.linear_model import LinearRegression
+        
+        # --- FIX: Standard-Dezimalzeichen (.) wird automatisch von Pandas erkannt ---
+        df = pd.read_csv(config.PV_DATA_URL) 
         df['Tag'] = pd.to_datetime(df['Tag'], format='%d.%m.%Y', errors='coerce')
         
         features = ['TagImJahr', 'Temperatur (°C)', 'Niederschlag (mm)', 'Sonnenstunden (h)']
         target = 'PV-Ertrag (kWh)'
+        
+        # --- FIX: Einfache Konvertierung zu numerischen Werten ---
+        for col in features + [target]:
+            if col in df.columns:
+                # Fehlerhafte Werte (Texte/Leerzeilen) werden zu NaN (Not a Number)
+                df[col] = pd.to_numeric(df[col], errors='coerce')
         
         # Train the model
         cutoff_train_date = pd.Timestamp(datetime.now() - timedelta(days=config.PV_TRAINING_DAYS))
@@ -193,10 +204,15 @@ def enrich_with_pv_data(historical_rows, forecast_rows):
             rain = row_data.get('rain') or 0.0
             sun = row_data.get('sun') or 0.0
             
-            # Predict using a DataFrame to suppress Sklearn warnings
             pred_df = pd.DataFrame([[day_of_year, row_data['temp'], rain, sun]], columns=features)
             pred_val = model.predict(pred_df)[0]
-            return max(0, pred_val) # Cap at 0
+            return max(0.0, float(pred_val)) # Stelle sicher, dass es ein Float ist
+
+        # Helper for safe string formatting
+        def format_val(val):
+            if val is None or pd.isna(val):
+                return "-"
+            return f"{float(val):.2f}"
 
         # Enrich Historical Rows
         if historical_rows:
@@ -205,10 +221,13 @@ def enrich_with_pv_data(historical_rows, forecast_rows):
                 actual = actual_pv_dict.get(date_ts, None)
                 predicted = predict_for_row(row)
 
-                row['pv_actual'] = actual
+                # Speichere saubere Zahlen oder None
+                row['pv_actual'] = float(actual) if actual is not None and not pd.isna(actual) else None
                 row['pv_predicted'] = predicted
-                row['pv_actual_fmt'] = f"{actual:.2f}" if actual is not None else "-"
-                row['pv_predicted_fmt'] = f"{predicted:.2f}" if predicted is not None else "-"
+                
+                # Speichere formatierte Strings für die HTML Tabelle
+                row['pv_actual_fmt'] = format_val(row['pv_actual'])
+                row['pv_predicted_fmt'] = format_val(row['pv_predicted'])
 
         # Enrich Forecast Rows
         if forecast_rows:
@@ -218,7 +237,7 @@ def enrich_with_pv_data(historical_rows, forecast_rows):
                 row['pv_actual'] = None # Forecast has no actual PV yield yet
                 row['pv_predicted'] = predicted
                 row['pv_actual_fmt'] = "-"
-                row['pv_predicted_fmt'] = f"{predicted:.2f}" if predicted is not None else "-"
+                row['pv_predicted_fmt'] = format_val(predicted)
 
     except Exception as exc:
         print(f"PV Enrichment Error: {exc}")
