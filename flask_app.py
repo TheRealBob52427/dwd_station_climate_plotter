@@ -9,7 +9,7 @@ from flask import Flask, render_template, request, jsonify
 import git
 
 import config
-from weather_logic import get_weather_data, get_forecast_data
+from weather_logic import get_weather_data, get_forecast_data, get_pv_data
 from plotting import create_plot
 
 app = Flask(__name__)
@@ -20,15 +20,12 @@ def get_git_hash():
     Returns 'unknown' if the repository cannot be accessed.
     """
     try:
-        # Path to the current directory
         repo_path = os.path.dirname(os.path.abspath(__file__))
         repo = git.Repo(repo_path)
-        # Return the first 7 characters of the hash (e.g., a1b2c3d)
         return repo.head.object.hexsha[:7]
     except Exception: # pylint: disable=broad-exception-caught
         return "unknown"
 
-# Calculate Git hash once at startup (Global Scope)
 CURRENT_GIT_HASH = get_git_hash()
 
 # --- MAIN ROUTE ---
@@ -48,7 +45,7 @@ def index():
     except ValueError:
         days_back = config.DEFAULT_DAYS
 
-    # 3. Forecast Time Range (NEW)
+    # 3. Forecast Time Range
     try:
         days_forecast = int(request.args.get('fc_days', config.DEFAULT_FORECAST_DAYS))
         if days_forecast not in config.FORECAST_RANGES:
@@ -56,27 +53,26 @@ def index():
     except ValueError:
         days_forecast = config.DEFAULT_FORECAST_DAYS
 
-    # 4. Fetch data
+    # 4. Fetch data (Weather, Forecast, and PV Yield)
     data_rows, summary_or_error = get_weather_data(days_back=days_back, station_id=station_id)
-    
-    # Fetch forecast with selected range
     forecast_rows = get_forecast_data(station_id, days_ahead=days_forecast)
+    pv_rows = get_pv_data(days_back=days_back)
 
     # 5. Generate Plot
     plot_json = None
-    if data_rows:
-        plot_json = create_plot(data_rows, forecast_rows)
+    if data_rows or pv_rows:
+        plot_json = create_plot(data_rows, forecast_rows, pv_rows)
 
     current_time_iso = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
     return render_template(
         'index.html',
         rows=data_rows,
-        forecast_rows=forecast_rows, # Pass forecast rows for the new table
+        forecast_rows=forecast_rows,
         summary=summary_or_error,
         error=summary_or_error if data_rows is None else None,
         plot_json=plot_json,
-        
+
         # Config
         stations=config.STATIONS,
         current_station=station_id,
@@ -85,8 +81,6 @@ def index():
         # Selectors
         time_ranges=config.TIME_RANGES,
         current_days=days_back,
-        
-        # Forecast Selectors
         forecast_ranges=config.FORECAST_RANGES,
         current_fc_days=days_forecast,
 
@@ -105,19 +99,14 @@ def webhook():
     """
     token = request.args.get('token')
 
-    # Security check
     if token != config.WEBHOOK_SECRET:
         return jsonify({"message": "Forbidden", "error": "Invalid token"}), 403
 
     try:
-        # Initialize Repo object for the current directory
         repo = git.Repo(os.path.dirname(os.path.abspath(__file__)))
         origin = repo.remotes.origin
-        
-        # Pull latest changes from GitHub
         pull_info = origin.pull()
 
-        # Touch the WSGI file to force a reload on PythonAnywhere
         if os.path.exists(config.WSGI_FILE_PATH):
             os.utime(config.WSGI_FILE_PATH, None)
             return jsonify({
@@ -125,7 +114,6 @@ def webhook():
                 "git_info": str(pull_info)
             }), 200
 
-        # Refactored to avoid unnecessary 'else' (Pylint R1705)
         return jsonify({
             "message": "Git pull successful, but WSGI file not found for reload.",
             "path_checked": config.WSGI_FILE_PATH

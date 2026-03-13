@@ -1,5 +1,5 @@
 """
-configuration settings for data retrieval and automatic release on pythonanywhere with github webhook
+Configuration settings for data retrieval and automatic release on PythonAnywhere with GitHub webhook.
 """
 
 # Your secret token for the GitHub Webhook.
@@ -43,7 +43,10 @@ DEFAULT_FORECAST_DAYS = 1
 # DWD OpenData Base URL
 DWD_URL = "https://opendata.dwd.de/climate_environment/CDC/observations_germany/climate/daily/kl/recent/"
 
+# PV YIELD PREDICTION SETTINGS
+PV_DATA_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQNLDD7-66luBZ4ijN9n4ruj3EpY1KYLVQUvCCohNZHeKtyKO4VFy_woeE2no7_6Mna5JUqKTr03snq/pub?output=csv"
+PV_TRAINING_DAYS = 90  # Number of recent days used to train the linear regression model
+
 # Project Settings
 GITHUB_REPO_URL = "https://github.com/TheRealBob52427/dwd_station_climate_plotter"
-
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0"

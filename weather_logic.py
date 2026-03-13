@@ -1,6 +1,7 @@
 """
 Logic module for the DWD Station Climate Plotter.
-Responsible for downloading, unzipping, and parsing data from the DWD OpenData server.
+Responsible for downloading, unzipping, and parsing data from the DWD OpenData server,
+fetching forecasts, and generating PV yield predictions via Linear Regression.
 """
 import csv
 import io
@@ -8,9 +9,13 @@ import zipfile
 from datetime import datetime, timedelta
 
 import requests
-from config import DWD_URL, STATION_COORDS
+import pandas as pd
+from sklearn.linear_model import LinearRegression
+
+import config
 
 def _get_float_val(row, key):
+    """Helper to safely extract float values from CSV rows."""
     try:
         val = float(row.get(key, -999))
         return val if val > -900 else None
@@ -18,6 +23,7 @@ def _get_float_val(row, key):
         return None
 
 def _find_dwd_filename(response_text, station_id):
+    """Parses the DWD directory HTML to find the correct zip file for a station."""
     search_pattern = f"_{station_id}_akt.zip"
     for line in response_text.splitlines():
         if search_pattern in line and "href" in line:
@@ -29,16 +35,12 @@ def _find_dwd_filename(response_text, station_id):
     return None
 
 def get_forecast_data(station_id, days_ahead=7):
-    """
-    Fetches forecast from Open-Meteo (using DWD ICON model).
-    """
-    if station_id not in STATION_COORDS:
+    """Fetches weather forecast from Open-Meteo API using the DWD ICON model."""
+    if station_id not in config.STATION_COORDS:
         return []
         
-    lat, lon = STATION_COORDS[station_id]
-    
-    # Ensure we request enough days from API (max usually 14-16 for free tier)
-    days_to_req = max(days_ahead, 1)
+    lat, lon = config.STATION_COORDS[station_id]
+    days_to_request = max(days_ahead, 1)
 
     url = "https://api.open-meteo.com/v1/forecast"
     params = {
@@ -46,8 +48,8 @@ def get_forecast_data(station_id, days_ahead=7):
         "longitude": lon,
         "daily": ["temperature_2m_max", "temperature_2m_min", "precipitation_sum", "sunshine_duration", "wind_speed_10m_max"],
         "timezone": "Europe/Berlin",
-        "models": "icon_d2",  # or 'best_match' if icon_d2 is too short range for 14 days (icon_d2 is usually 48h, might fallback)
-        "forecast_days": days_to_req
+        "models": "icon_d2",
+        "forecast_days": days_to_request
     }
 
     try:
@@ -60,7 +62,6 @@ def get_forecast_data(station_id, days_ahead=7):
         
         forecast_rows = []
         for i, date_str in enumerate(times):
-            # Stop if we have enough days (API might return more)
             if i >= days_ahead:
                 break
 
@@ -70,7 +71,6 @@ def get_forecast_data(station_id, days_ahead=7):
             
             sun_sec = daily["sunshine_duration"][i]
             sun_hours = sun_sec / 3600 if sun_sec is not None else 0
-            
             wind = daily.get("wind_speed_10m_max", [None])[i]
 
             forecast_rows.append({
@@ -80,26 +80,19 @@ def get_forecast_data(station_id, days_ahead=7):
                 "rain": daily["precipitation_sum"][i],
                 "sun": sun_hours,
                 "wind": wind,
-                # Formatted for display
                 "temp_fmt": f"{t_avg:.1f}" if t_avg is not None else "-",
                 "rain_fmt": f"{daily['precipitation_sum'][i]:.1f}" if daily["precipitation_sum"][i] is not None else "-",
                 "sun_fmt": f"{sun_hours:.2f}" if sun_hours is not None else "-",
                 "wind_fmt": f"{wind:.1f}" if wind is not None else "-",
                 "type": "forecast"
             })
-            
         return forecast_rows
-
-    except Exception as e:
-        print(f"Forecast Error: {e}")
+    except Exception as exc:
+        print(f"Forecast Error: {exc}")
         return []
 
 def get_weather_data(days_back=30, station_id="02667"):
-    # ... (Keep your existing get_weather_data function EXACTLY as it was) ...
-    """
-    Fetches weather data from the DWD OpenData server...
-    (Paste the content of your original get_weather_data here)
-    """
+    """Fetches historical weather data from the DWD OpenData server."""
     end_date = datetime.now()
     start_date = end_date - timedelta(days=days_back)
     rows = []
@@ -107,33 +100,33 @@ def get_weather_data(days_back=30, station_id="02667"):
     temps = []
 
     try:
-        response = requests.get(DWD_URL, timeout=10)
+        response = requests.get(config.DWD_URL, timeout=10)
         file_name = _find_dwd_filename(response.text, station_id)
         if not file_name:
             return None, f"File for station {station_id} not found on server."
 
-        zip_resp = requests.get(DWD_URL + file_name, timeout=30)
+        zip_resp = requests.get(config.DWD_URL + file_name, timeout=30)
         with zipfile.ZipFile(io.BytesIO(zip_resp.content)) as z_file:
             data_filename = [n for n in z_file.namelist() if n.startswith("produkt_")][0]
             with z_file.open(data_filename) as f_obj:
                 content = f_obj.read().decode('utf-8')
                 reader = csv.DictReader(content.splitlines(), delimiter=';')
                 reader.fieldnames = [name.strip() for name in reader.fieldnames]
-                if "MESS_DATUM" in reader.fieldnames:
-                    date_col = "MESS_DATUM"
-                else:
-                    date_col = "MESS_DATUM_BEGINN"
+                
+                date_col = "MESS_DATUM" if "MESS_DATUM" in reader.fieldnames else "MESS_DATUM_BEGINN"
 
                 for row in reader:
                     try:
                         date_obj = datetime.strptime(row[date_col], "%Y%m%d")
                     except ValueError:
                         continue
+                    
                     if start_date <= date_obj <= end_date:
                         temp = _get_float_val(row, 'TMK')
                         rain = _get_float_val(row, 'RSK')
                         sun = _get_float_val(row, 'SDK')
                         wind = _get_float_val(row, 'FX')
+                        
                         rows.append({
                             "date": date_obj.strftime('%d.%m.%Y'),
                             "date_obj": date_obj,
@@ -157,3 +150,56 @@ def get_weather_data(days_back=30, station_id="02667"):
     summary["sum_sun"] = round(summary["sum_sun"], 2)
     rows.reverse()
     return rows, summary
+
+def get_pv_data(days_back=30):
+    """
+    Fetches historical PV and weather data from Google Sheets, 
+    trains a linear regression model based on configured training days,
+    and returns actual vs predicted data for the requested display period.
+    """
+    try:
+        # Load CSV (handles German number formats with comma decimals)
+        df = pd.read_csv(config.PV_DATA_URL, decimal=',') 
+        df['Tag'] = pd.to_datetime(df['Tag'], format='%d.%m.%Y', errors='coerce')
+        
+        # Exact column names from the Google Sheet
+        features = ['TagImJahr', 'Temperatur (°C)', 'Niederschlag (mm)', 'Sonnenstunden (h)']
+        target = 'PV-Ertrag (kWh)'
+        
+        # 1. Prepare training data (Drop missing values, apply training timeframe)
+        cutoff_train_date = pd.Timestamp(datetime.now() - timedelta(days=config.PV_TRAINING_DAYS))
+        train_df = df.dropna(subset=features + [target])
+        train_df = train_df[train_df['Tag'] >= cutoff_train_date]
+        
+        if train_df.empty:
+            return []
+            
+        x_train = train_df[features]
+        y_train = train_df[target]
+        
+        # 2. Train Model
+        model = LinearRegression()
+        model.fit(x_train, y_train)
+        
+        # 3. Generate predictions for all valid feature rows
+        predict_df = df.dropna(subset=features).copy()
+        predict_df['Predicted_PV'] = model.predict(predict_df[features])
+        predict_df['Predicted_PV'] = predict_df['Predicted_PV'].clip(lower=0) 
+        
+        # 4. Filter for the requested display timeframe
+        cutoff_display_date = pd.Timestamp(datetime.now() - timedelta(days=days_back))
+        filtered_df = predict_df[predict_df['Tag'] >= cutoff_display_date]
+        
+        # 5. Format to dictionary list
+        pv_rows = []
+        for _, row in filtered_df.iterrows():
+            pv_rows.append({
+                "date_obj": row['Tag'].to_pydatetime(),
+                "actual": row[target] if pd.notna(row[target]) else None,
+                "predicted": row['Predicted_PV']
+            })
+            
+        return pv_rows
+    except Exception as exc:
+        print(f"PV Data/Training Error: {exc}")
+        return []
