@@ -151,55 +151,80 @@ def get_weather_data(days_back=30, station_id="02667"):
     rows.reverse()
     return rows, summary
 
-def get_pv_data(days_back=30):
+# Stelle sicher, dass pd und LinearRegression importiert sind (oben in der Datei):
+# import pandas as pd
+# from sklearn.linear_model import LinearRegression
+
+def enrich_with_pv_data(historical_rows, forecast_rows):
     """
-    Fetches historical PV and weather data from Google Sheets, 
-    trains a linear regression model based on configured training days,
-    and returns actual vs predicted data for the requested display period.
+    Fetches PV data, trains the linear regression model, and enriches both 
+    historical and forecast rows with 'pv_actual' and 'pv_predicted' values.
     """
+    if not historical_rows and not forecast_rows:
+        return historical_rows, forecast_rows
+
     try:
-        # Load CSV (handles German number formats with comma decimals)
-        df = pd.read_csv(config.PV_DATA_URL, decimal=',') 
+        df = pd.read_csv(config.PV_DATA_URL, decimal=',')
         df['Tag'] = pd.to_datetime(df['Tag'], format='%d.%m.%Y', errors='coerce')
         
-        # Exact column names from the Google Sheet
         features = ['TagImJahr', 'Temperatur (°C)', 'Niederschlag (mm)', 'Sonnenstunden (h)']
         target = 'PV-Ertrag (kWh)'
         
-        # 1. Prepare training data (Drop missing values, apply training timeframe)
+        # Train the model
         cutoff_train_date = pd.Timestamp(datetime.now() - timedelta(days=config.PV_TRAINING_DAYS))
         train_df = df.dropna(subset=features + [target])
         train_df = train_df[train_df['Tag'] >= cutoff_train_date]
         
-        if train_df.empty:
-            return []
+        model = None
+        if not train_df.empty:
+            x_train = train_df[features]
+            y_train = train_df[target]
+            model = LinearRegression()
+            model.fit(x_train, y_train)
+
+        # Dictionary for fast lookup of actual PV data by date
+        actual_pv_dict = df.dropna(subset=[target]).set_index('Tag')[target].to_dict()
+
+        # Helper to predict PV for a single row
+        def predict_for_row(row_data):
+            if model is None or row_data.get('temp') is None:
+                return None
+            day_of_year = row_data['date_obj'].timetuple().tm_yday
+            rain = row_data.get('rain') or 0.0
+            sun = row_data.get('sun') or 0.0
             
-        x_train = train_df[features]
-        y_train = train_df[target]
-        
-        # 2. Train Model
-        model = LinearRegression()
-        model.fit(x_train, y_train)
-        
-        # 3. Generate predictions for all valid feature rows
-        predict_df = df.dropna(subset=features).copy()
-        predict_df['Predicted_PV'] = model.predict(predict_df[features])
-        predict_df['Predicted_PV'] = predict_df['Predicted_PV'].clip(lower=0) 
-        
-        # 4. Filter for the requested display timeframe
-        cutoff_display_date = pd.Timestamp(datetime.now() - timedelta(days=days_back))
-        filtered_df = predict_df[predict_df['Tag'] >= cutoff_display_date]
-        
-        # 5. Format to dictionary list
-        pv_rows = []
-        for _, row in filtered_df.iterrows():
-            pv_rows.append({
-                "date_obj": row['Tag'].to_pydatetime(),
-                "actual": row[target] if pd.notna(row[target]) else None,
-                "predicted": row['Predicted_PV']
-            })
-            
-        return pv_rows
+            # Predict using a DataFrame to suppress Sklearn warnings
+            pred_df = pd.DataFrame([[day_of_year, row_data['temp'], rain, sun]], columns=features)
+            pred_val = model.predict(pred_df)[0]
+            return max(0, pred_val) # Cap at 0
+
+        # Enrich Historical Rows
+        if historical_rows:
+            for row in historical_rows:
+                date_ts = pd.Timestamp(row['date_obj'])
+                actual = actual_pv_dict.get(date_ts, None)
+                predicted = predict_for_row(row)
+
+                row['pv_actual'] = actual
+                row['pv_predicted'] = predicted
+                row['pv_actual_fmt'] = f"{actual:.2f}" if actual is not None else "-"
+                row['pv_predicted_fmt'] = f"{predicted:.2f}" if predicted is not None else "-"
+
+        # Enrich Forecast Rows
+        if forecast_rows:
+            for row in forecast_rows:
+                predicted = predict_for_row(row)
+                
+                row['pv_actual'] = None # Forecast has no actual PV yield yet
+                row['pv_predicted'] = predicted
+                row['pv_actual_fmt'] = "-"
+                row['pv_predicted_fmt'] = f"{predicted:.2f}" if predicted is not None else "-"
+
     except Exception as exc:
-        print(f"PV Data/Training Error: {exc}")
-        return []
+        print(f"PV Enrichment Error: {exc}")
+        # Fallback to empty values if Google Sheet fails
+        for r in (historical_rows or []) + (forecast_rows or []):
+            r['pv_actual'] = r['pv_predicted'] = None
+            r['pv_actual_fmt'] = r['pv_predicted_fmt'] = "-"
+
+    return historical_rows, forecast_rows

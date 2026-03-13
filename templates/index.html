@@ -350,6 +350,7 @@
                             <th>Rain (mm)</th>
                             <th>Sun (h)</th>
                             <th>Wind (m/s)</th>
+                            <th>Predicted PV Yield (kWh)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -360,6 +361,7 @@
                             <td>{{ row.rain_fmt }}</td>
                             <td>{{ row.sun_fmt }}</td>
                             <td>{{ row.wind_fmt }}</td>
+                            <td>{{ row.pv_predicted_fmt }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -379,6 +381,8 @@
                             <th>Rain (mm)</th>
                             <th>Sun (h)</th>
                             <th>Wind (m/s)</th>
+                            <th>Actual PV Yield (kWh)</th>
+                            <th>Predicted PV Yield (kWh)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -389,6 +393,8 @@
                             <td>{{ row.rain_fmt }}</td>
                             <td>{{ row.sun_fmt }}</td>
                             <td>{{ row.wind_fmt }}</td>
+                            <td>{{ row.pv_actual_fmt }}</td>
+                            <td>{{ row.pv_predicted_fmt }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>

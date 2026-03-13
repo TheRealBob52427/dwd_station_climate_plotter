@@ -9,7 +9,7 @@ from flask import Flask, render_template, request, jsonify
 import git
 
 import config
-from weather_logic import get_weather_data, get_forecast_data, get_pv_data
+from weather_logic import get_weather_data, get_forecast_data, enrich_with_pv_data
 from plotting import create_plot
 
 app = Flask(__name__)
@@ -56,12 +56,14 @@ def index():
     # 4. Fetch data (Weather, Forecast, and PV Yield)
     data_rows, summary_or_error = get_weather_data(days_back=days_back, station_id=station_id)
     forecast_rows = get_forecast_data(station_id, days_ahead=days_forecast)
-    pv_rows = get_pv_data(days_back=days_back)
+    
+    # NEU: PV-Daten in beide Listen (Historie & Forecast) injizieren
+    data_rows, forecast_rows = enrich_with_pv_data(data_rows, forecast_rows)
 
-    # 5. Generate Plot
+    # 5. Generate Plot (benötigt jetzt kein drittes Argument mehr)
     plot_json = None
-    if data_rows or pv_rows:
-        plot_json = create_plot(data_rows, forecast_rows, pv_rows)
+    if data_rows or forecast_rows:
+        plot_json = create_plot(data_rows, forecast_rows)
 
     current_time_iso = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 

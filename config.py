@@ -49,4 +49,4 @@ PV_TRAINING_DAYS = 90  # Number of recent days used to train the linear regressi
 
 # Project Settings
 GITHUB_REPO_URL = "https://github.com/TheRealBob52427/dwd_station_climate_plotter"
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.2.1"
