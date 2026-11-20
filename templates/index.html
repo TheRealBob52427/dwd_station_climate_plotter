@@ -245,6 +245,15 @@
             border-radius: 4px;
             margin-bottom: 20px;
         }
+
+        .warn-msg {
+            color: #856404;
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
@@ -308,7 +317,14 @@
             <small>Note: This station might not provide up-to-date data for all parameters via the OpenData server.</small>
         </div>
     {% else %}
-        
+
+        {% if forecast_error %}
+        <div class="warn-msg">
+            <strong>Forecast unavailable:</strong> {{ forecast_error }}<br>
+            <small>Historical data is unaffected. Check the PythonAnywhere error log for details.</small>
+        </div>
+        {% endif %}
+
         <div class="summary">
             <div class="summary-title">Historical Summary (Last {{ current_days }} Days)</div>
             <div class="summary-grid">

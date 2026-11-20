@@ -2,6 +2,7 @@
 Main application for the DWD Station Climate Plotter.
 Handles web requests, renders templates, and manages GitHub webhooks for auto-deployment.
 """
+import logging
 import os
 from datetime import datetime
 
@@ -11,6 +12,8 @@ import git
 import config
 from weather_logic import get_weather_data, get_forecast_data, enrich_with_pv_data
 from plotting import create_plot
+
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
@@ -55,8 +58,11 @@ def index():
 
     # 4. Fetch data (Weather, Forecast, and PV Yield)
     data_rows, summary_or_error = get_weather_data(days_back=days_back, station_id=station_id)
-    forecast_rows = get_forecast_data(station_id, days_ahead=days_forecast)
-    
+    forecast_rows, forecast_error = get_forecast_data(station_id, days_ahead=days_forecast)
+
+    if forecast_error:
+        logger.error("Forecast for station %s unavailable: %s", station_id, forecast_error)
+
     # NEU: PV-Daten in beide Listen (Historie & Forecast) injizieren
     data_rows, forecast_rows = enrich_with_pv_data(data_rows, forecast_rows)
 
@@ -73,6 +79,7 @@ def index():
         forecast_rows=forecast_rows,
         summary=summary_or_error,
         error=summary_or_error if data_rows is None else None,
+        forecast_error=forecast_error,
         plot_json=plot_json,
 
         # Config
