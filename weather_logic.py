@@ -20,6 +20,10 @@ logger = logging.getLogger(__name__)
 
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 
+# Keyless DWD forecast (hourly, up to ~10 days) used when Open-Meteo is
+# unreachable or rate-limits the host (shared hosting IPs hit 429 quickly).
+BRIGHTSKY_URL = "https://api.brightsky.dev/weather"
+
 # Open-Meteo discontinues the "DWD ICON D2" (icon_d2) model at the end of
 # November 2026. icon_d2 also only covers ~48 h, so fall back to
 # icon_seamless (= ICON-D2 -> ICON-EU -> ICON Global, still DWD only).
@@ -75,6 +79,10 @@ def _fetch_daily_forecast(params, needed_days):
         except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.warning("Open-Meteo model %s failed: %s", model, exc)
             errors.append(f"{model} ({type(exc).__name__}: {str(exc)[:80]})")
+            # 429 is an IP-level limit: the other models will be rejected too.
+            if getattr(getattr(exc, "response", None), "status_code", None) == 429:
+                logger.warning("Open-Meteo rate limit (429) for this host, stopping model retries")
+                break
     return None, "; ".join(errors)[:400]
 
 
@@ -84,6 +92,83 @@ def _at(seq, idx):
         return seq[idx]
     except (IndexError, KeyError, TypeError):
         return None
+
+
+def _brightsky_rows(lat, lon, days_ahead, today):
+    """Builds daily forecast rows from Bright Sky (DWD data, no API key needed).
+
+    Bright Sky returns hourly values only, so daily max/min/sum are aggregated here.
+    Returns (rows, error_text).
+    """
+    tz = ZoneInfo("Europe/Berlin")
+    params = {
+        "lat": lat,
+        "lon": lon,
+        "date": (today - timedelta(days=1)).isoformat(),
+        "last_date": (today + timedelta(days=days_ahead + 1)).isoformat(),
+    }
+
+    try:
+        response = requests.get(BRIGHTSKY_URL, params=params, timeout=(5, 15))
+        response.raise_for_status()
+        hours = (response.json() or {}).get("weather") or []
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.warning("Bright Sky failed: %s", exc)
+        return [], f"brightsky ({type(exc).__name__}: {str(exc)[:80]})"
+
+    buckets = {}
+    for hour in hours:
+        stamp = hour.get("timestamp")
+        if not stamp:
+            continue
+        try:
+            day = datetime.fromisoformat(stamp).astimezone(tz).date()
+        except ValueError:
+            continue
+        bucket = buckets.setdefault(day, {"temp": [], "rain": [], "sun": [], "wind": []})
+        for key, field in (("temp", "temperature"), ("rain", "precipitation"),
+                           ("sun", "sunshine"), ("wind", "wind_speed")):
+            value = hour.get(field)
+            if value is not None:
+                bucket[key].append(value)
+
+    rows = []
+    for day in sorted(buckets):
+        if day <= today:
+            continue
+        if len(rows) >= days_ahead:
+            break
+        bucket = buckets[day]
+        temps = bucket["temp"]
+        # Skip partial days (Bright Sky ends at the last available hour, which can
+        # leave a day with only a couple of values and therefore bogus min/max).
+        if len(temps) < 20:
+            logger.info("Bright Sky day %s incomplete (%d hours), skipped", day, len(temps))
+            continue
+        t_avg = (max(temps) + min(temps)) / 2
+        rain = round(sum(bucket["rain"]), 1) if bucket["rain"] else None
+        sun_hours = round(sum(bucket["sun"]) / 60, 2) if bucket["sun"] else None
+        wind = max(bucket["wind"]) if bucket["wind"] else None
+        date_obj = datetime.combine(day, datetime.min.time())
+
+        rows.append({
+            "date": date_obj.strftime('%d.%m.%Y'),
+            "date_obj": date_obj,
+            "temp": t_avg,
+            "rain": rain,
+            "sun": sun_hours,
+            "wind": wind,
+            "temp_fmt": f"{t_avg:.1f}" if t_avg is not None else "-",
+            "rain_fmt": f"{rain:.1f}" if rain is not None else "-",
+            "sun_fmt": f"{sun_hours:.2f}" if sun_hours is not None else "-",
+            "wind_fmt": f"{wind:.1f}" if wind is not None else "-",
+            "type": "forecast",
+            "source": "brightsky",
+        })
+
+    if not rows:
+        return [], "brightsky (no usable days returned)"
+    return rows, None
 
 
 def get_forecast_data(station_id, days_ahead=1):
@@ -116,8 +201,13 @@ def get_forecast_data(station_id, days_ahead=1):
 
     payload, error = _fetch_daily_forecast(params, needed_days=params["forecast_days"])
     if payload is None:
-        logger.error("Forecast unavailable for station %s: %s", station_id, error)
-        return [], error
+        logger.warning("Open-Meteo unavailable (%s), trying Bright Sky", error)
+        bs_rows, bs_error = _brightsky_rows(lat, lon, days_ahead, today)
+        if bs_rows:
+            logger.info("Forecast for station %s served by Bright Sky fallback", station_id)
+            return bs_rows, None
+        logger.error("Forecast unavailable for station %s: %s | %s", station_id, error, bs_error)
+        return [], f"{error}; {bs_error}"[:400]
 
     try:
         daily = payload.get("daily") or {}
