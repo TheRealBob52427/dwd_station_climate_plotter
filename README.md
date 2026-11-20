@@ -152,3 +152,4 @@ Configure a GitHub Webhook pointing to `http://yourusername.pythonanywhere.com/u
 * **License:** This project is licensed under the **Apache License 2.0** ([LICENSE](LICENSE)).
 * **Historical Data:** Provided by the **Deutscher Wetterdienst (DWD)** via their [OpenData Server](https://opendata.dwd.de/).
 * **Forecast Data:** Provided by **[Open-Meteo.com](https://open-meteo.com/)** under the [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) license.
+* **Fallback Forecast:** Provided by **[Bright Sky](https://brightsky.dev/)** (DWD ICON/MOSMIX data, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)) when Open-Meteo is unreachable or rate-limited.
