@@ -5,14 +5,25 @@ fetching forecasts, and generating PV yield predictions via Linear Regression.
 """
 import csv
 import io
+import logging
 import zipfile
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import requests
 import pandas as pd
 from sklearn.linear_model import LinearRegression
 
 import config
+
+logger = logging.getLogger(__name__)
+
+FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
+
+# Open-Meteo discontinues the "DWD ICON D2" (icon_d2) model at the end of
+# November 2026. icon_d2 also only covers ~48 h, so fall back to
+# icon_seamless (= ICON-D2 -> ICON-EU -> ICON Global, still DWD only).
+FORECAST_MODELS = ("icon_d2", "icon_seamless", "best_match")
 
 def _get_float_val(row, key):
     """Helper to safely extract float values from CSV rows."""
@@ -34,62 +45,127 @@ def _find_dwd_filename(response_text, station_id):
                 return potential
     return None
 
-def get_forecast_data(station_id, days_ahead=7):
-    """Fetches weather forecast from Open-Meteo API using the DWD ICON model."""
-    if station_id not in config.STATION_COORDS:
-        return []
-        
-    lat, lon = config.STATION_COORDS[station_id]
-    days_to_request = max(days_ahead, 1)
+def _fetch_daily_forecast(params, needed_days):
+    """Queries Open-Meteo, trying each model in FORECAST_MODELS in order.
 
-    url = "https://api.open-meteo.com/v1/forecast"
+    A model is only accepted if it actually has data for `needed_days` days:
+    icon_d2 for example answers with HTTP 200 but null values beyond ~48 h.
+
+    Returns (payload, error_text). payload is None if every attempt failed.
+    """
+    errors = []
+    for model in FORECAST_MODELS:
+        try:
+            response = requests.get(
+                FORECAST_URL,
+                params={**params, "models": model},
+                timeout=(5, 12),
+            )
+            response.raise_for_status()
+            payload = response.json()
+            if payload.get("error"):
+                raise ValueError(payload.get("reason", "unknown API error"))
+
+            t_max = (payload.get("daily") or {}).get("temperature_2m_max") or []
+            usable_days = sum(1 for value in t_max if value is not None)
+            if usable_days < needed_days:
+                raise ValueError(f"only {usable_days} of {needed_days} days have data")
+
+            return payload, None
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            logger.warning("Open-Meteo model %s failed: %s", model, exc)
+            errors.append(f"{model} ({type(exc).__name__}: {str(exc)[:80]})")
+    return None, "; ".join(errors)[:400]
+
+
+def _at(seq, idx):
+    """Safe list access for partly missing Open-Meteo daily arrays."""
+    try:
+        return seq[idx]
+    except (IndexError, KeyError, TypeError):
+        return None
+
+
+def get_forecast_data(station_id, days_ahead=1):
+    """Fetches the weather forecast for the next `days_ahead` days (starting tomorrow).
+
+    Returns (rows, error). error is None on success, otherwise a human readable
+    string explaining why no forecast could be built. Rows are never silently
+    dropped: the caller decides whether to show the error.
+    """
+    if station_id not in config.STATION_COORDS:
+        return [], f"No coordinates configured for station {station_id}."
+
+    lat, lon = config.STATION_COORDS[station_id]
+    today = datetime.now(ZoneInfo("Europe/Berlin")).date()
+
     params = {
         "latitude": lat,
         "longitude": lon,
-        "daily": ["temperature_2m_max", "temperature_2m_min", "precipitation_sum", "sunshine_duration", "wind_speed_10m_max"],
+        "daily": [
+            "temperature_2m_max",
+            "temperature_2m_min",
+            "precipitation_sum",
+            "sunshine_duration",
+            "wind_speed_10m_max",
+        ],
         "timezone": "Europe/Berlin",
-        "models": "icon_d2",
-        "forecast_days": days_to_request
+        # "next N days" starts tomorrow, so ask for today + N
+        "forecast_days": max(days_ahead, 1) + 1,
     }
 
+    payload, error = _fetch_daily_forecast(params, needed_days=params["forecast_days"])
+    if payload is None:
+        logger.error("Forecast unavailable for station %s: %s", station_id, error)
+        return [], error
+
     try:
-        response = requests.get(url, params=params, timeout=5)
-        response.raise_for_status()
-        data = response.json()
-        
-        daily = data.get("daily", {})
-        times = daily.get("time", [])
-        
+        daily = payload.get("daily") or {}
+        times = daily.get("time") or []
+        t_max_list = daily.get("temperature_2m_max") or []
+        t_min_list = daily.get("temperature_2m_min") or []
+        rain_list = daily.get("precipitation_sum") or []
+        sun_list = daily.get("sunshine_duration") or []
+        wind_list = daily.get("wind_speed_10m_max") or []
+
         forecast_rows = []
         for i, date_str in enumerate(times):
-            if i >= days_ahead:
+            date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+            if date_obj.date() <= today:
+                continue  # the forecast table/chart is about the next days
+            if len(forecast_rows) >= days_ahead:
                 break
 
-            t_max = daily["temperature_2m_max"][i]
-            t_min = daily["temperature_2m_min"][i]
+            t_max = _at(t_max_list, i)
+            t_min = _at(t_min_list, i)
             t_avg = (t_max + t_min) / 2 if t_max is not None and t_min is not None else None
-            
-            sun_sec = daily["sunshine_duration"][i]
-            sun_hours = sun_sec / 3600 if sun_sec is not None else 0
-            wind = daily.get("wind_speed_10m_max", [None])[i]
+
+            rain = _at(rain_list, i)
+            sun_sec = _at(sun_list, i)
+            sun_hours = sun_sec / 3600 if sun_sec is not None else None
+            wind = _at(wind_list, i)
 
             forecast_rows.append({
-                "date": datetime.strptime(date_str, "%Y-%m-%d").strftime('%d.%m.%Y'),
-                "date_obj": datetime.strptime(date_str, "%Y-%m-%d"),
+                "date": date_obj.strftime('%d.%m.%Y'),
+                "date_obj": date_obj,
                 "temp": t_avg,
-                "rain": daily["precipitation_sum"][i],
+                "rain": rain,
                 "sun": sun_hours,
                 "wind": wind,
                 "temp_fmt": f"{t_avg:.1f}" if t_avg is not None else "-",
-                "rain_fmt": f"{daily['precipitation_sum'][i]:.1f}" if daily["precipitation_sum"][i] is not None else "-",
+                "rain_fmt": f"{rain:.1f}" if rain is not None else "-",
                 "sun_fmt": f"{sun_hours:.2f}" if sun_hours is not None else "-",
                 "wind_fmt": f"{wind:.1f}" if wind is not None else "-",
                 "type": "forecast"
             })
-        return forecast_rows
-    except Exception as exc:
-        print(f"Forecast Error: {exc}")
-        return []
+
+        if not forecast_rows:
+            return [], "Open-Meteo returned no data for the requested days."
+
+        return forecast_rows, None
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.exception("Could not parse Open-Meteo forecast: %s", exc)
+        return [], f"Could not parse forecast response: {exc}"
 
 def get_weather_data(days_back=30, station_id="02667"):
     """Fetches historical weather data from the DWD OpenData server."""
